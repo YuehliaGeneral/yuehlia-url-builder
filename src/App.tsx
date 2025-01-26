@@ -1,6 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Card, CardContent } from "./components/ui/card";
 import { Button } from "./components/ui/button";
+import { Modal } from "./components/ui/modal";
+
+const utmInfo = {
+    utm_source: "The source of the traffic, e.g., Google, WhatsApp, Instagram.",
+    utm_medium:
+        "The medium of the traffic, e.g., story, banner, push_notification.",
+    utm_campaign: "The name of the campaign, e.g., spring_sale.",
+};
 
 const URLBuilder = () => {
     const [baseURL, setBaseURL] = useState("");
@@ -8,13 +16,21 @@ const URLBuilder = () => {
         utm_source: "",
         utm_medium: "",
         utm_campaign: "",
-        utm_term: "",
-        utm_content: "",
     });
     const [generatedURL, setGeneratedURL] = useState("");
     const [presets, setPresets] = useState(() => {
         return JSON.parse(localStorage.getItem("utmPresets")) || [];
     });
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [modalContent, setModalContent] = useState("");
+    const [selectWidth, setSelectWidth] = useState(0);
+    const selectRef = useRef(null);
+
+    useEffect(() => {
+        if (selectRef.current) {
+            setSelectWidth(selectRef.current.offsetWidth);
+        }
+    }, [baseURL]);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -34,16 +50,17 @@ const URLBuilder = () => {
             )
             .join("&");
 
-        const finalURL = baseURL.includes("?")
-            ? `${baseURL}&${queryParams}`
-            : `${baseURL}?${queryParams}`;
+        const cleanedBaseURL = baseURL.replace(/\/$/, "");
+
+        const finalURL = cleanedBaseURL.includes("?")
+            ? `${cleanedBaseURL}&${queryParams}`
+            : `${cleanedBaseURL}?${queryParams}`;
 
         setGeneratedURL(finalURL);
     };
 
-    const copyToClipboard = () => {
-        navigator.clipboard.writeText(generatedURL);
-        alert("URL copied to clipboard!");
+    const copyToClipboard = (url: string) => {
+        navigator.clipboard.writeText(url);
     };
 
     const savePreset = () => {
@@ -51,7 +68,6 @@ const URLBuilder = () => {
         const updatedPresets = [...presets, newPreset];
         setPresets(updatedPresets);
         localStorage.setItem("utmPresets", JSON.stringify(updatedPresets));
-        alert("Preset saved!");
     };
 
     const loadPreset = (preset) => {
@@ -60,9 +76,18 @@ const URLBuilder = () => {
             utm_source: preset.utm_source,
             utm_medium: preset.utm_medium,
             utm_campaign: preset.utm_campaign,
-            utm_term: preset.utm_term,
-            utm_content: preset.utm_content,
         });
+    };
+
+    const getYuehliaURL = (url: string) => {
+        // convert https://yuehlia.com/product-category/bath/ to yuehlia://product-category/bath and remove the slash at the end
+        return url.replace("https://yuehlia.com", "yuehlia:/");
+    };
+
+    const openModal = (utmType: any) => {
+        const content = utmInfo[utmType] || "No information available.";
+        setModalContent(content);
+        setIsModalOpen(true);
     };
 
     return (
@@ -70,7 +95,7 @@ const URLBuilder = () => {
             <CardContent>
                 <div className="text-center mb-6">
                     <img
-                        src="/logo.png"
+                        src="./assets/logo.png"
                         alt="Company Logo"
                         className="mx-auto h-12 mb-2"
                     />
@@ -82,24 +107,41 @@ const URLBuilder = () => {
                     </p>
                 </div>
                 <div className="space-y-4">
-                    <input
-                        type="text"
-                        name="baseURL"
-                        value={baseURL}
-                        onChange={handleInputChange}
-                        placeholder="Enter Base URL"
-                        className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-[#bb5394]"
-                    />
-                    {Object.keys(utmParams).map((key) => (
+                    <div className="relative">
                         <input
-                            key={key}
                             type="text"
-                            name={key}
-                            value={utmParams[key]}
+                            name="baseURL"
+                            value={baseURL}
                             onChange={handleInputChange}
-                            placeholder={`Enter ${key.replace("utm_", "")}`}
-                            className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-[#bb5394]"
+                            placeholder="Enter Base URL"
+                            className="w-full p-2 pl-28 border rounded focus:outline-none focus:ring-2 focus:ring-[#bb5394]"
+                            style={{ paddingLeft: `${selectWidth + 16}px` }}
                         />
+
+                        <p className="mt-1 ml-0 text-sm text-gray-400">
+                            Paste the URL from the website (<b>Product</b> or{" "}
+                            <b>Category</b>)
+                        </p>
+                    </div>
+                    {Object.keys(utmParams).map((key) => (
+                        <div key={key} className="relative">
+                            <input
+                                key={key}
+                                type="text"
+                                name={key}
+                                value={utmParams[key]}
+                                onChange={handleInputChange}
+                                placeholder={`Enter ${key}`}
+                                className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-[#bb5394]"
+                            />
+                            <Button
+                                size="sm"
+                                className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-[#bb5394] text-white hover:bg-[#a54883]"
+                                onClick={() => openModal(key)}
+                            >
+                                ?
+                            </Button>
+                        </div>
                     ))}
                     <div className="space-x-2 text-center">
                         <Button
@@ -127,13 +169,38 @@ const URLBuilder = () => {
                         </Button>
                     </div>
                     {generatedURL && (
-                        <div className="mt-4 p-2 border rounded bg-gray-100">
-                            <p className="text-sm font-semibold">
-                                Generated URL:
+                        <div className="mt-4 p-4 border rounded bg-gray-100">
+                            <p className="text-sm font-semibold mb-2">
+                                Generated URLs:
                             </p>
-                            <p className="break-words text-blue-600">
-                                {generatedURL}
-                            </p>
+                            <div className="mb-2">
+                                <p className="text-sm font-semibold text-gray-700">
+                                    HTTPS URL:
+                                </p>
+                                <a
+                                    href={copyToClipboard(
+                                        getYuehliaURL(generatedURL)
+                                    )}
+                                    rel="noreferrer"
+                                    className="break-words text-blue-600"
+                                >
+                                    {generatedURL}
+                                </a>
+                            </div>
+                            <div>
+                                <p className="text-sm font-semibold text-gray-700">
+                                    Yuehlia URL:
+                                </p>
+                                <a
+                                    href={copyToClipboard(
+                                        getYuehliaURL(generatedURL)
+                                    )}
+                                    rel="noreferrer"
+                                    className="break-words text-blue-600"
+                                >
+                                    {getYuehliaURL(generatedURL)}
+                                </a>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -162,6 +229,13 @@ const URLBuilder = () => {
                     </div>
                 )}
             </CardContent>
+            <Modal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                title="UTM Parameter Info"
+            >
+                <p>{modalContent}</p>
+            </Modal>
         </Card>
     );
 };
